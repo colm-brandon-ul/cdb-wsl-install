@@ -84,7 +84,8 @@ wsl.exe sudo microk8s status --wait-ready
 wsl.exe sudo microk8s helm repo add scce https://colm-brandon-ul.github.io/cincodebio-helm-chart
 wsl.exe sudo microk8s helm repo update
 # Installing CincoDeBio Cores Services
-wsl.exe sudo microk8s helm install my-cinco-de-bio scce/cinco-de-bio
+Write-Output "Installing CincoDeBio Cores Services, this may take a few minutes"
+wsl.exe sudo microk8s helm install --wait my-cinco-de-bio scce/cinco-de-bio
 
 # wait for the above to finish
 
@@ -92,6 +93,7 @@ wsl.exe sudo microk8s helm install my-cinco-de-bio scce/cinco-de-bio
 Clear-Host
 
 # Write Outputs
+Write-Output "URL to Upload Portal (Copy this URL into your browser): http://$ip_address/data-manager/"
 Write-Output "The CincoDeBio Cluster has started. IP Address: $ip_address (Copy this IP Address into the CincoDeBio Preferences in the Modelling Application)"
 Write-Output "The CincoDeBio Cores Services are now being installed, this may take a few minutes"
 Read-Host "Press Enter to Quit"
