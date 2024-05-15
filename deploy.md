@@ -1,3 +1,6 @@
+# Prerequisites 
+DockerHub Account (The repository for storing services is currently docker hub), therefore need credentials to authenticate to avoid rate limiting.m
+
 ## Validate Systename
 <!-- Windows System Name only contains lowercase letters, numbers and hyphens -->
 Need to use a regex for validating current hostname (i.e. system name)
@@ -16,6 +19,8 @@ wsl --set-default-version 2
 <!-- Update Ubuntu dependencies -->
 wsl sudo apt update
 wsl sudo apt upgrade -y
+
+<!-- If wsl does not launch Linux installation in new window, complete the process as normal the hit CTRL-D (to return to rest of deployment) -->
 
 <!-- Turn on Systemd (so that snap will work) -->
 <!-- have to escape newline as it's being passed via powershell -->
