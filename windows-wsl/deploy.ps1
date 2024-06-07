@@ -10,6 +10,7 @@ $hostnameValid = $($systemName -match "[a-z0-9\-]+")
 
 if (!$hostnameValid) {
     Write-Output "Hostname is invalid. Exiting."
+    exit
     # Logic for changing the hostname
 }
 
@@ -32,7 +33,7 @@ if (!(Test-Path -Path $wslBackup)) {
 
 # Installing Ubuntu # wait for the above to finish
 wsl.exe --install -d $distro
-# 
+
 Write-Output "WSL will open a separate window to complete the $distro installation"
 Write-Output "Navigate to other window to complete. This requires setting a Username and Password"
 Write-Output "When you have completed that step, return to this window and press Enter to continue"
