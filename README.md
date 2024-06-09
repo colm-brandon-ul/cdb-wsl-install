@@ -152,7 +152,15 @@ Finally hit the Refresh CdB SIBs button on the top toolbar, this will synchronis
 
 Download the [bash script ](https://raw.githubusercontent.com/colm-brandon-ul/cdb-wsl-install/master/linux/deploy.sh "Download Script")which installs the execution platform and it's dependencies.
 
-**TBC...**
+To run the script open *Bash* and `bash <path-to-script>/deploy.sh` replacing `<path-to-script>` with the directory you saved the script to.
+
+You will first be prompted to enter your DockerHub Username followed by your DockerHub Password (ensure these are correct as deployment will fail otherwise).
+
+The script will then install microk8s on the host system (you may be prompted to enter your system password).
+
+Once the microk8s cluster has started, the various addons and configurations required for running the CdB execution platform will be deployed on the cluster. The cluster will then be restarted.
+
+Finally the CdB services will be deployed on the cluster. The IP address for the cluster will be printed **(to be implemented).**
 
 #### Integrated Modelling Environment
 
@@ -164,24 +172,56 @@ Download the [application](https://sourceforge.net/projects/cincodebio/files/ime
 
 ##### Add Execution Platform IP address to IME Preferences
 
+
+##### Configure Java Virtual Machine (If Necessary)
+
+The IME requires Java 11 to be installed to on your machine to work. If you do not have a Java 11 already on your machine (and configured on your path) follow these instructions
+
+1. Head to the [Temurin webite](https://adoptium.net/temurin/releases/?version=11&package=jdk&os=windows&arch=any) and select options from the dropdown for 'Architecture' to match your system.
+2. Download the JDK (.zip version), unzip it and rename the unzipped folder `jre`.
+3. Find the folder for the IME, it should be named something like `HippoFlowTool-1.202405081710`. Open it.
+4. Move/Copy the extracted `jre folder` (from step 2) into the `HippoFlowTool-1.202405081710 folder`.
+
+##### Add Execution Platform IP address to IME Preferences
+
+In the IME navigate to `Hippoflow -> Setting -> CincoDeBio Preferences` in the menu.
+
+You should see a form like the one below:
+
+[[ Insert Screenshot ]]
+
+Next, enter in the IP address (which was displayed when the execution platform was installed. Don't included http(s)://, etc.. Only the IP address (i.e. 0.0.0.0)
+
+Hit **Apply and Close.**
+
+Finally hit the Refresh CdB SIBs button on the top toolbar, this will synchronise the SIB palette with the set of SIBs available on the execution platform.
+
 ## Hardware Tested On:
 
-Tested on:* **Macbook Pro 14"**
+Tested on:
 
-* Storage:
-  * SSD
-* RAM:
-  * 16GB LPDDR5
-* OS:
-  * 14.1.2 (23B92)
-* CPU:
-  * Apple M1 Pro
-* Software Dependencies:
-  * Multipass:
-    * v1.13.1
-  * Microk8s:
-    * v2.3.4
+* **Macbook Pro 14"**
+
+  * Storage:
+
+    * SSD
+  * RAM:
+
+    * 16GB LPDDR5
+  * OS:
+
+    * 14.1.2 (23B92)
+  * CPU:
+
+    * Apple M1 Pro
+  * Software Dependencies:
+
+    * Multipass:
+      * v1.13.1
+    * Microk8s:
+      * v2.3.4
 * **Dell Precision 3660**
+
   * Storage:
     * SSD / HDD
   * RAM:
@@ -193,6 +233,7 @@ Tested on:* **Macbook Pro 14"**
   * GPU:
     * Nvidia 3090
 * **Precision 5820 Tower**
+
   * Storage
     * SSD / HDD
   * RAM

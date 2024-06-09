@@ -1,4 +1,3 @@
-
 #!/bin/bash
 
 # Take the user input for the dockerhub username (in a while loop with regex validation)
@@ -119,6 +118,9 @@ microk8s enable hostpath-storage
 microk8s enable storage
 
 # Add dockerhub credentials to microk8s cluster
+multipass exec microk8s-vm -- bash -c "echo '[plugins.\"io.containerd.grpc.v1.cri\".registry.configs.\"registry-1.docker.io\".auth]
+username = \"$dockerhub_username\"
+password = \"$dockerhub_password\"' | sudo tee -a /var/snap/microk8s/current/args/containerd-template.toml > /dev/null"
 
 # restart cluster
 microk8s stop
