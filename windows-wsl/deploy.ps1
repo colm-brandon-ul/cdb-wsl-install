@@ -76,12 +76,12 @@ while (-not $valid_password) {
 # perhaps should do a test auth here
 
 # install microk8s
-wsl.exe sudo snap install microk8s --classic
+wsl.exe -d $distro sudo snap install microk8s --classic
 Write-Output "Microk8s is now installed. Waiting for it to be ready"
-wsl.exe sudo microk8s status --wait-ready
+wsl.exe -d $distro sudo microk8s status --wait-ready
 
-wsl.exe sudo microk8s kubectl get node -o wide
-wsl.exe sudo bash -c "echo '# Docker Hub Credentials' >> /var/snap/microk8s/current/args/containerd-template.toml"
+wsl.exe -d $distro sudo microk8s kubectl get node -o wide
+wsl.exe -d $distro sudo bash -c "echo '# Docker Hub Credentials' >> /var/snap/microk8s/current/args/containerd-template.toml"
 
 $command = @"
 echo '[plugins.\"io.containerd.grpc.v1.cri\".registry.configs.\"registry-1.docker.io\".auth]
@@ -89,11 +89,11 @@ username = \"{0}\"
 password = \"{1}\"' >> /var/snap/microk8s/current/args/containerd-template.toml
 "@ -f $dockerhub_username, $dockerhub_password
 # update the containerd config
-wsl.exe sudo bash -c $command
+wsl.exe -d $distro sudo bash -c $command
 
 # restart microk8s
-wsl.exe sudo microk8s stop
-wsl.exe sudo microk8s start
+wsl.exe -d $distro sudo microk8s stop
+wsl.exe -d $distro sudo microk8s start
 
 Write-Output "Now migrating the WSL VHD to the largest drive - $($largestDrive.Root)"
 
@@ -114,15 +114,15 @@ wsl.exe -d $distro sudo microk8s enable hostpath-storage
 wsl.exe -d $distro sudo microk8s enable storage
 
 Write-Output "Restarting Microk8s. Waiting for it to be ready"
-wsl.exe sudo microk8s status --wait-ready
+wsl.exe -d $distro sudo microk8s status --wait-ready
 # Adding the CincoDeBio Helm Chart Repo
-wsl.exe sudo microk8s helm repo add scce https://colm-brandon-ul.github.io/cincodebio-helm-chart
-wsl.exe sudo microk8s helm repo update
+wsl.exe -d $distro sudo microk8s helm repo add scce https://colm-brandon-ul.github.io/cincodebio-helm-chart
+wsl.exe -d $distro sudo microk8s helm repo update
 # Installing CincoDeBio Cores Services
 Write-Output "Installing CincoDeBio Cores Services, this may take a few minutes"
 
 # need to set the Dockerhub username and password here via --set flag
-wsl.exe sudo microk8s helm install --wait my-cinco-de-bio scce/cinco-de-bio --set global.containers.docker_hub_username=$dockerhub_username --set global.containers.docker_hub_password=$dockerhub_password
+wsl.exe -d $distro sudo microk8s helm install --wait my-cinco-de-bio scce/cinco-de-bio --set global.containers.docker_hub_username=$dockerhub_username --set global.containers.docker_hub_password=$dockerhub_password
 
 # wait for the above to finish
 
