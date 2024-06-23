@@ -76,7 +76,7 @@ while (-not $valid_password) {
 # perhaps should do a test auth here
 
 # install microk8s
-wsl.exe -d $distro sudo snap install microk8s --classic
+wsl.exe -d $distro sudo snap install microk8s --classic --channel=1.28/stable
 Write-Output "Microk8s is now installed. Waiting for it to be ready"
 wsl.exe -d $distro sudo microk8s status --wait-ready
 
@@ -103,7 +103,11 @@ wsl.exe --unregister $distro
 wsl.exe --import $distro $wslRoot "$wslBackup\$distro.tar"
 
 # This variable needs to be stored now, as the IP address will change after the next command
+wsl.exe -d $distro sudo microk8s stop # stop microk8s to get the IP address
+wsl.exe -d $distro sudo microk8s start 
 $ip_address = $(wsl -d $distro hostname -I)
+
+
 
 # Enable microk8s addons use for cinco-de-bio
 wsl.exe -d $distro sudo microk8s enable dns
