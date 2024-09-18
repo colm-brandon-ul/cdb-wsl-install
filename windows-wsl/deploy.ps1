@@ -47,10 +47,51 @@ wsl.exe --set-default-version 2
 wsl.exe --set-default $distro
 Write-Output "You will be prompted to enter the password for the user you created in the Ubuntu installation"
 wsl.exe -d $distro sudo apt update
-wsl.exe -d $distro sudo apt upgrade -y
-# entering in the password for the second command is not necessary
-# wsl.exe sudo echo -e "[boot]\\nsystemd=true" | wsl.exe sudo tee /etc/wsl.conf
+wsl.exe -d $distro sudo apt upgrade
 wsl.exe sudo sh -c 'echo \"[boot] \nsystemd=true\" > /etc/wsl.conf'
+
+# Update package lists and install necessary packages
+wsl.exe sudo apt-get update
+wsl.exe sudo apt-get install -y conntrack
+# Set the nf_conntrack_max value temporarily
+wsl.exe sudo sysctl -w net.netfilter.nf_conntrack_max=131072
+# Make the nf_conntrack_max setting persistent across reboots
+wsl.exe sudo bash -c "echo 'net.netfilter.nf_conntrack_max=131072' | sudo tee -a /etc/sysctl.conf"
+# Reload sysctl settings to apply the change immediately
+wsl.exe sudo sysctl -p
+# Verify that the setting was successfully added
+wsl.exe sudo bash -c "cat /etc/sysctl.conf | grep nf_conntrack_max"
+# Create the systemd service to load nf_conntrack at boot
+$serviceDefinition = @"
+[Unit]
+Description=Load nf_conntrack module and set nf_conntrack_max
+After=network.target
+
+[Service]
+Type=oneshot
+ExecStart=/sbin/modprobe nf_conntrack
+ExecStart=/sbin/sysctl -w net.netfilter.nf_conntrack_max=131072
+RemainAfterExit=yes
+
+[Install]
+WantedBy=multi-user.target
+"@
+
+# Write the service definition to the WSL2 filesystem
+wsl.exe sudo bash -c "echo '$serviceDefinition' | sudo tee /etc/systemd/system/load-conntrack.service"
+
+# Enable the systemd service to run at boot
+wsl.exe sudo systemctl enable load-conntrack.service
+
+# Start the service immediately to apply the configuration
+wsl.exe sudo systemctl start load-conntrack.service
+
+# Install containerd (if not already installed)
+wsl.exe sudo apt-get update
+wsl.exe sudo apt-get install -y containerd
+wsl.exe sudo systemctl enable containerd
+wsl.exe sudo systemctl start containerd
+# wsl.exe sudo systemctl status containerd
 
 wsl.exe --shutdown
 
