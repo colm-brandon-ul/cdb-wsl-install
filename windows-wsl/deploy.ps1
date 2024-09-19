@@ -46,22 +46,8 @@ wsl.exe --set-version $distro 2
 wsl.exe --set-default-version 2
 wsl.exe --set-default $distro
 Write-Output "You will be prompted to enter the password for the user you created in the Ubuntu installation"
-wsl.exe -d $distro sudo apt update
-wsl.exe -d $distro sudo apt upgrade
-wsl.exe sudo sh -c 'echo \"[boot] \nsystemd=true\" > /etc/wsl.conf'
+wsl.exe -d $distro sudo sh -c 'apt update && apt upgrade -y && echo \"[boot] \nsystemd=true\" > /etc/wsl.conf && apt-get update && apt-get install -y conntrack'
 
-# Update package lists and install necessary packages
-wsl.exe sudo apt-get update
-wsl.exe sudo apt-get install -y conntrack
-# Set the nf_conntrack_max value temporarily
-wsl.exe sudo sysctl -w net.netfilter.nf_conntrack_max=131072
-# Make the nf_conntrack_max setting persistent across reboots
-wsl.exe sudo bash -c "echo 'net.netfilter.nf_conntrack_max=131072' | sudo tee -a /etc/sysctl.conf"
-# Reload sysctl settings to apply the change immediately
-wsl.exe sudo sysctl -p
-# Verify that the setting was successfully added
-wsl.exe sudo bash -c "cat /etc/sysctl.conf | grep nf_conntrack_max"
-# Create the systemd service to load nf_conntrack at boot
 $serviceDefinition = @"
 [Unit]
 Description=Load nf_conntrack module and set nf_conntrack_max
@@ -77,22 +63,8 @@ RemainAfterExit=yes
 WantedBy=multi-user.target
 "@
 
-# Write the service definition to the WSL2 filesystem
-wsl.exe sudo bash -c "echo '$serviceDefinition' | sudo tee /etc/systemd/system/load-conntrack.service"
-
-# Enable the systemd service to run at boot
-wsl.exe sudo systemctl enable load-conntrack.service
-
-# Start the service immediately to apply the configuration
-wsl.exe sudo systemctl start load-conntrack.service
-
-# Install containerd (if not already installed)
-wsl.exe sudo apt-get update
-wsl.exe sudo apt-get install -y containerd
-wsl.exe sudo systemctl enable containerd
-wsl.exe sudo systemctl start containerd
-# wsl.exe sudo systemctl status containerd
-
+# configure the nf_conntrack_max value and create the systemd service, also install containerd and start it as a service
+wsl.exe -d $distro sudo bash -c "sysctl -w net.netfilter.nf_conntrack_max=131072 && echo 'net.netfilter.nf_conntrack_max=131072' | sudo tee -a /etc/sysctl.conf && sysctl -p && cat /etc/sysctl.conf | grep nf_conntrack_max && echo '$serviceDefinition' | sudo tee /etc/systemd/system/load-conntrack.service && systemctl enable load-conntrack.service && systemctl start load-conntrack.service && apt-get update && sudo apt-get install -y containerd && systemctl enable containerd && systemctl start containerd"
 wsl.exe --shutdown
 
 # assume input is invalid
@@ -115,26 +87,15 @@ while (-not $valid_password) {
 }
 
 # perhaps should do a test auth here
-
-# install microk8s
-wsl.exe -d $distro sudo snap install microk8s --classic --channel=1.28/stable
-Write-Output "Microk8s is now installed. Waiting for it to be ready"
-wsl.exe -d $distro sudo microk8s status --wait-ready
-
-wsl.exe -d $distro sudo microk8s kubectl get node -o wide
-wsl.exe -d $distro sudo bash -c "echo '# Docker Hub Credentials' >> /var/snap/microk8s/current/args/containerd-template.toml"
-
 $command = @"
 echo '[plugins.\"io.containerd.grpc.v1.cri\".registry.configs.\"registry-1.docker.io\".auth]
 username = \"{0}\"
 password = \"{1}\"' >> /var/snap/microk8s/current/args/containerd-template.toml
 "@ -f $dockerhub_username, $dockerhub_password
-# update the containerd config
-wsl.exe -d $distro sudo bash -c $command
 
-# restart microk8s
-wsl.exe -d $distro sudo microk8s stop
-wsl.exe -d $distro sudo microk8s start
+# install microk8s
+wsl.exe -d $distro sudo bash -c "snap install microk8s --classic --channel=1.28/stable && microk8s status --wait-ready && microk8s kubectl get node -o wide && echo '# Docker Hub Credentials' >> /var/snap/microk8s/current/args/containerd-template.toml && $command && microk8s stop && microk8s start"
+Write-Output "Microk8s is now installed. Waiting for it to be ready"
 
 Write-Output "Now migrating the WSL VHD to the largest drive - $($largestDrive.Root)"
 
@@ -146,7 +107,9 @@ wsl.exe --import $distro $wslRoot "$wslBackup\$distro.tar"
 # This variable needs to be stored now, as the IP address will change after the next command
 wsl.exe -d $distro sudo microk8s stop # stop microk8s to get the IP address
 wsl.exe -d $distro sudo microk8s start 
-$ip_address = $(wsl -d $distro hostname -I)
+# The IP address of the windows bridge adapter for wsl2 (which is used to access the k8s cluster) 
+# is the first IP address of the distro, the second IP address is for internal traffic
+$ip_address = $(wsl -d $distro hostname -I | ForEach-Object { ($_ -split ' ')[0] })
 
 
 
@@ -165,11 +128,34 @@ wsl.exe -d $distro sudo microk8s helm repo add scce https://colm-brandon-ul.gith
 wsl.exe -d $distro sudo microk8s helm repo update
 # Installing CincoDeBio Cores Services
 Write-Output "Installing CincoDeBio Cores Services, this may take a few minutes"
-
 # need to set the Dockerhub username and password here via --set flag
 wsl.exe -d $distro sudo microk8s helm install --wait my-cinco-de-bio scce/cinco-de-bio --set global.containers.docker_hub_username=$dockerhub_username --set global.containers.docker_hub_password=$dockerhub_password
-
 # wait for the above to finish
+wsl.exe -d $distro bash -c '
+while true; do
+  # Get the total number of pods (regardless of their status)
+  total_pods_count=$(microk8s kubectl get pods --all-namespaces -o jsonpath="{.items[*].metadata.name}" | wc -w)
+
+  # Get the number of pods not in the Running state
+  pods_not_running_count=$(microk8s kubectl get pods --all-namespaces --field-selector=status.phase!=Running -o jsonpath="{.items[*].metadata.name}" | wc -w)
+
+  # If there are no pods at all, wait until some pods are deployed
+  if [ "$total_pods_count" -eq 0 ]; then
+    echo "No pods found. Waiting for pods to be deployed..."
+    sleep 10
+    continue
+  fi
+
+  # If all pods are running, exit the loop
+  if [ "$pods_not_running_count" -eq 0 ]; then
+    echo "All $total_pods_count pods are running."
+    break
+  else
+    echo "There are $pods_not_running_count Services not yet running out of $total_pods_count total pods. Checking again in 10 seconds..."
+    sleep 10
+  fi
+done
+'
 
 # Clear Output from Shell
 Clear-Host
