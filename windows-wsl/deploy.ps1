@@ -3,6 +3,7 @@
 wsl.exe --update
 # Global Variables
 $distro = "Ubuntu-22.04"
+$helm_repo = "https://colm-brandon-ul.github.io/cincodebio-helm-chart"
 # Get system name
 $systemName = $(hostname)
 # apply regex to system name to make sure it's lowercase letters, numbers and hyphens only
@@ -14,22 +15,47 @@ if (!$hostnameValid) {
     # Logic for changing the hostname
 }
 
-# Find the Drive with most available space
-$drives = Get-PSDrive -PSProvider FileSystem | Where-Object {$_.Free -ne $null}
-$largestDrive = $drives | Sort-Object -Property Free -Descending | Select-Object -First 1
-# Get the root of the largest drive
-Write-Output $largestDrive.Root
+# Would you like to move the WSL VHD to the largest drive?
+# check if input is Y/N in a while loop
+$moveVHD = $null
+$wslRoot = $null
+$wslBackup = $null
+while ($moveVHD -ne "Y" -and $moveVHD -ne "N") {
+    $moveVHD = Read-Host "Would you like to move the WSL VHD to the largest drive? (Y/N)"
+}
+# check if the input is valid
+if ($moveVHD -eq "Y") {
+    $moveVHD = $true
+}
+else {
+    $moveVHD = $false
+}
 
-# Make folder(s) for WSL VHD migration
-$wslRoot = "$($largestDrive.Root)wsl"
-$wslBackup = "$($largestDrive.Root)wsl-backup"
-# make the folder if it doesn't exist
-if (!(Test-Path -Path $wslRoot)) {
-    New-Item -Path $wslRoot -ItemType Directory
+if ($moveVHD) {
+    Write-Output "Moving the WSL VHD to the largest drive"
+    # Find the Drive with most available space
+    $drives = Get-PSDrive -PSProvider FileSystem | Where-Object { $_.Free -ne $null }
+    $largestDrive = $drives | Sort-Object -Property Free -Descending | Select-Object -First 1
+    # Get the root of the largest drive
+    Write-Output $largestDrive.Root
+
+    # Make folder(s) for WSL VHD migration
+    $wslRoot = "$($largestDrive.Root)wsl"
+    $wslBackup = "$($largestDrive.Root)wsl-backup"
+    # make the folder if it doesn't exist
+    if (!(Test-Path -Path $wslRoot)) {
+        New-Item -Path $wslRoot -ItemType Directory
+    }
+    if (!(Test-Path -Path $wslBackup)) {
+        New-Item -Path $wslBackup -ItemType Directory
+    }
 }
-if (!(Test-Path -Path $wslBackup)) {
-    New-Item -Path $wslBackup -ItemType Directory
+else {
+    Write-Output "Not moving the WSL VHD to the largest drive"
 }
+
+
+
 
 # Installing Ubuntu # wait for the above to finish
 wsl.exe --install -d $distro
@@ -97,40 +123,20 @@ password = \"{1}\"' >> /var/snap/microk8s/current/args/containerd-template.toml
 wsl.exe -d $distro sudo bash -c "snap install microk8s --classic --channel=1.28/stable && microk8s status --wait-ready && microk8s kubectl get node -o wide && echo '# Docker Hub Credentials' >> /var/snap/microk8s/current/args/containerd-template.toml && $command && microk8s stop && microk8s start"
 Write-Output "Microk8s is now installed. Waiting for it to be ready"
 
-Write-Output "Now migrating the WSL VHD to the largest drive - $($largestDrive.Root)"
-
-wsl.exe --export $distro "$wslBackup\$distro.tar"
-# delete the distro and reimport it to the new location
-wsl.exe --unregister $distro
-wsl.exe --import $distro $wslRoot "$wslBackup\$distro.tar"
-
-# This variable needs to be stored now, as the IP address will change after the next command
-wsl.exe -d $distro sudo microk8s stop # stop microk8s to get the IP address
-wsl.exe -d $distro sudo microk8s start 
-# The IP address of the windows bridge adapter for wsl2 (which is used to access the k8s cluster) 
-# is the first IP address of the distro, the second IP address is for internal traffic
-$ip_address = $(wsl -d $distro hostname -I | ForEach-Object { ($_ -split ' ')[0] })
-
-
-
-# Enable microk8s addons use for cinco-de-bio
-wsl.exe -d $distro sudo microk8s enable dns
-wsl.exe -d $distro sudo microk8s enable ingress
-wsl.exe -d $distro sudo microk8s enable metrics-server
-wsl.exe -d $distro sudo microk8s enable registry
-wsl.exe -d $distro sudo microk8s enable hostpath-storage
-wsl.exe -d $distro sudo microk8s enable storage
+if ($moveVHD -and $wslRoot -ne $null -and $wslBackup -ne $null) {
+    Write-Output "Now migrating the WSL VHD to the largest drive - $($largestDrive.Root)"
+    # Make this optional (as it may not work on some machines)
+    wsl.exe --export $distro "$wslBackup\$distro.tar"
+    # delete the distro and reimport it to the new location
+    wsl.exe --unregister $distro
+    wsl.exe --import $distro $wslRoot "$wslBackup\$distro.tar"
+}
 
 Write-Output "Restarting Microk8s. Waiting for it to be ready"
-wsl.exe -d $distro sudo microk8s status --wait-ready
-# Adding the CincoDeBio Helm Chart Repo
-wsl.exe -d $distro sudo microk8s helm repo add scce https://colm-brandon-ul.github.io/cincodebio-helm-chart
-wsl.exe -d $distro sudo microk8s helm repo update
-# Installing CincoDeBio Cores Services
 Write-Output "Installing CincoDeBio Cores Services, this may take a few minutes"
-# need to set the Dockerhub username and password here via --set flag
-wsl.exe -d $distro sudo microk8s helm install --wait my-cinco-de-bio scce/cinco-de-bio --set global.containers.docker_hub_username=$dockerhub_username --set global.containers.docker_hub_password=$dockerhub_password
-# wait for the above to finish
+wsl.exe -d $distro sudo bash -c "microk8s stop && microk8s start && microk8s enable dns && microk8s enable ingress && microk8s enable metrics-server && microk8s enable registry && microk8s enable hostpath-storage && microk8s enable storage && microk8s status --wait-ready && microk8s helm repo add scce $helm_repo && microk8s helm repo update && microk8s helm install --wait my-cinco-de-bio scce/cinco-de-bio --set global.containers.docker_hub_username=$dockerhub_username --set global.containers.docker_hub_password=$dockerhub_password"
+# The IP address of the windows bridge adapter for wsl2 (which is used to access the k8s cluster) 
+# is the first IP address of the distro, the second IP address is for internal traffic
 wsl.exe -d $distro bash -c '
 while true; do
   # Get the total number of pods (regardless of their status)
@@ -156,10 +162,9 @@ while true; do
   fi
 done
 '
-
 # Clear Output from Shell
 Clear-Host
-
+$ip_address = $(wsl -d $distro hostname -I | ForEach-Object { ($_ -split ' ')[0] })
 # Write Outputs
 Write-Output "URL to Upload Portal (Copy this URL into your browser): http://$ip_address/data-manager/"
 Write-Output "The CincoDeBio Cluster has started. IP Address: $ip_address (Copy this IP Address into the CincoDeBio Preferences in the Modelling Application)"
