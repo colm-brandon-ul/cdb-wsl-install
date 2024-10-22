@@ -2,7 +2,7 @@
 
 # Take the user input for the dockerhub username (in a while loop with regex validation)
 while true; do
-  read -p "Enter the username: " dockerhub_username
+  read -p "Enter your DockerHub username: " dockerhub_username
   if echo "$dockerhub_username" | grep -Eq '^[a-zA-Z0-9](?:[a-zA-Z0-9-]{3,})$'; then
     break
   else
@@ -12,7 +12,7 @@ done
 
 # Take the user input for the dockerhub password (in a while loop with regex validation)
 while true; do
-  read -p "Enter the password: " dockerhub_password
+  read -p "Enter your DockerHub password: " dockerhub_password
   if echo "$dockerhub_password" | grep -Eq '^.{8,}$'; then
     break
   else
